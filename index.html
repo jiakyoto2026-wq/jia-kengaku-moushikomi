@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>見学会 申し込み受付の作成 | JIA京都地域会</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><h1>JIA京都地域会　見学会 申し込み受付の作成</h1></header>
+<main>
+<div class="card" id="form">
+<p>見学会などの事業を登録すると、申し込みページ・申込者一覧（スプレッドシート）が自動で作られ、担当者へメールで届きます。</p>
+<label class="req">事業名</label><input type="text" id="name" placeholder="例：○○邸 見学会">
+<div class="row">
+ <div><label class="req">開催日</label><input type="date" id="date"></div>
+ <div><label>申込締切日 <small>（任意）</small></label><input type="date" id="deadline"></div>
+</div>
+<div class="row">
+ <div><label class="req">担当者名</label><input type="text" id="staffName"></div>
+ <div><label class="req">担当者連絡先 <small>（メールアドレス）</small></label><input type="email" id="staffContact"></div>
+</div>
+<label class="req">定員数</label><input type="number" id="capacity" min="1" style="max-width:160px"> 名
+<label>参加費 <small>（0円または空欄は「参加無料」と表示されます）</small></label>
+<table id="feeTable"></table>
+<label>支払い方法 <small>（参加費がある場合に選択）</small></label>
+<div class="opt"><label><input type="checkbox" name="pay" value="当日現金徴収"> 当日現金徴収</label><label><input type="checkbox" name="pay" value="振込"> 振込</label></div>
+<label>キャンセル待ち</label>
+<div class="opt"><label><input type="radio" name="wl" value="1" checked> 有り</label><label><input type="radio" name="wl" value="0"> 無し（定員で締切）</label></div>
+<label>追記事項1 <small>（申し込みページとお礼メールに表示：集合場所・時間など）</small></label><textarea id="note1"></textarea>
+<label>追記事項2 <small>（持ち物・注意事項など）</small></label><textarea id="note2"></textarea>
+<button id="go">この内容で作成する</button>
+<div id="err" class="msg ng" style="display:none"></div>
+</div>
+<div class="card" id="done" style="display:none">
+ <h2>作成しました</h2>
+ <div class="msg ok">担当者にもメールでお知らせしました。</div>
+ <p><b>申し込みページ（参加者にお知らせするURL）</b><br><code id="u1"></code></p>
+ <p><b>申込者一覧（スプレッドシート）</b><br><a id="u2" target="_blank">開く</a></p>
+ <p><b>保存フォルダ（Google Drive）</b><br><a id="u3" target="_blank">開く</a></p>
+ <p id="shareNote" class="msg warn" style="display:none">担当者のメールアドレスにはシートを共有できませんでした（Googleアカウントではない可能性）。事務局へご相談ください。</p>
+</div>
+</main>
+<script src="config.js"></script>
+<script>
+const CATS=['JIA京都地域会会員','JIA京都地域会会員スタッフ','学生','JIA正会員','一般'];
+const $=id=>document.getElementById(id);
+$('feeTable').innerHTML=CATS.map((c,i)=>`<tr><td>${c}</td><td><input type="number" min="0" step="100" id="fee${i}" placeholder="0" style="width:120px"> 円</td></tr>`).join('');
+$('go').onclick=async()=>{
+ const err=$('err');err.style.display='none';
+ const fees={};CATS.forEach((c,i)=>fees[c]=parseInt($('fee'+i).value,10)||0);
+ const body={action:'createEvent',name:$('name').value,date:$('date').value,deadline:$('deadline').value,
+  staffName:$('staffName').value,staffContact:$('staffContact').value,capacity:$('capacity').value,fees,
+  payments:[...document.querySelectorAll('input[name=pay]:checked')].map(x=>x.value),
+  waitlist:document.querySelector('input[name=wl]:checked').value==='1',
+  note1:$('note1').value,note2:$('note2').value,
+  siteUrl:location.href.replace(/\/[^\/]*$/,'')};
+ $('go').disabled=true;$('go').textContent='作成中…（30秒ほどかかります）';
+ try{
+  const r=await (await fetch(window.GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)})).json();
+  if(!r.ok)throw new Error(r.error);
+  $('u1').textContent=r.applyUrl;$('u2').href=r.sheetUrl;$('u3').href=r.folderUrl;
+  if(!r.shared)$('shareNote').style.display='block';
+  $('form').style.display='none';$('done').style.display='block';
+ }catch(e){err.textContent='エラー：'+e.message;err.style.display='block';$('go').disabled=false;$('go').textContent='この内容で作成する';}
+};
+</script></body></html>

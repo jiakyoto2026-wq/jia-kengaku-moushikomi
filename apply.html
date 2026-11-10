@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>見学会 お申し込み | JIA京都地域会</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><h1>JIA京都地域会　お申し込み</h1></header>
+<main>
+<div id="loading" class="card">読み込み中…</div>
+<div id="info" class="card" style="display:none">
+ <h2 id="title"></h2>
+ <table>
+  <tr><th style="width:90px">開催日</th><td id="date"></td></tr>
+  <tr><th>定員</th><td id="cap"></td></tr>
+  <tr><th>担当</th><td id="staff"></td></tr>
+  <tr><th>参加費</th><td id="fees"></td></tr>
+ </table>
+ <p class="note" id="notes"></p>
+ <div id="status" class="msg"></div>
+</div>
+<div id="form" class="card" style="display:none">
+ <label class="req">氏名</label><input type="text" id="name" autocomplete="name">
+ <label class="req">携帯番号</label><input type="tel" id="phone" autocomplete="tel" placeholder="09012345678">
+ <label class="req">メールアドレス</label><input type="email" id="email" autocomplete="email">
+ <label>CPD番号 <small>（お持ちの方）</small></label><input type="text" id="cpd">
+ <label class="req">区分</label><select id="category"></select>
+ <div id="feeShow" class="msg ok" style="display:none"></div>
+ <div id="payBox"><label class="req">支払い方法</label><select id="payment"></select></div>
+ <label>連絡事項 <small>（任意）</small></label><textarea id="message"></textarea>
+ <button id="go">申し込む</button>
+ <div id="err" class="msg ng" style="display:none"></div>
+</div>
+<div id="result" class="card" style="display:none"></div>
+</main>
+<script src="config.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const id=new URLSearchParams(location.search).get('event');
+let EV=null;
+const yen=n=>n>0?n.toLocaleString()+'円':'参加無料';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){
+ try{
+  const r=await (await fetch(window.GAS_URL+'?action=event&id='+encodeURIComponent(id))).json();
+  if(!r.ok)throw new Error(r.error);
+  EV=r.event;
+  $('title').textContent=EV.name;$('date').textContent=EV.date+(EV.deadline?'（申込締切 '+EV.deadline+'）':'');
+  $('cap').textContent=EV.capacity+'名（残り '+EV.remaining+'名'+(EV.waitlist?'／キャンセル待ち':'')+'）';
+  $('staff').textContent=EV.staffName+'（'+EV.staffContact+'）';
+  $('fees').innerHTML=r.categories.map(c=>`${esc(c)}：<span class="${EV.fees[c]>0?'':'free'}">${yen(EV.fees[c])}</span>`).join('<br>');
+  $('notes').textContent=[EV.note1,EV.note2].filter(Boolean).join('\n\n');
+  const st=$('status');
+  if(EV.state==='open'){st.className='msg ok';st.textContent='受付中です。';}
+  else if(EV.state==='waitlist'){st.className='msg warn';st.textContent='定員に達しました。キャンセル待ちとして受け付けます（申し込み順にご連絡します）。';}
+  else{st.className='msg ng';st.textContent=EV.closedReason||'受付は終了しました。';}
+  if(EV.state!=='closed'){
+   $('category').innerHTML='<option value="">選択してください</option>'+r.categories.map(c=>`<option>${esc(c)}</option>`).join('');
+   $('payment').innerHTML='<option value="">選択してください</option>'+EV.payments.map(p=>`<option>${esc(p)}</option>`).join('');
+   $('form').style.display='block';
+   $('go').textContent=EV.state==='waitlist'?'キャンセル待ちで申し込む':'申し込む';
+  }
+  $('loading').style.display='none';$('info').style.display='block';
+ }catch(e){$('loading').className='card msg ng';$('loading').textContent='このページを開けません：'+e.message;}
+}
+$('category').onchange=()=>{
+ const c=$('category').value,f=EV.fees[c]||0,b=$('feeShow');
+ if(!c){b.style.display='none';$('payBox').style.display='block';return;}
+ b.style.display='block';b.textContent='参加費：'+yen(f);
+ $('payBox').style.display=f>0?'block':'none';
+};
+$('go').onclick=async()=>{
+ const err=$('err');err.style.display='none';$('go').disabled=true;
+ const data={name:$('name').value,phone:$('phone').value,email:$('email').value,cpd:$('cpd').value,
+  category:$('category').value,payment:$('payment').value,message:$('message').value};
+ try{
+  const r=await (await fetch(window.GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'apply',eventId:id,data})})).json();
+  if(!r.ok)throw new Error(r.error);
+  $('form').style.display='none';$('info').style.display='none';
+  const res=$('result');res.style.display='block';
+  res.innerHTML=r.status==='参加確定'
+   ?'<h2>お申し込みを受け付けました</h2><p>受付番号 '+r.no+'。確認メールをお送りしました（届かない場合は迷惑メールをご確認ください）。<br>詳細は担当者からお知らせします。</p>'
+   :'<h2>キャンセル待ちで受け付けました</h2><p>キャンセル待ち '+r.waitNo+'番目です。キャンセルが出た場合、申し込み順にメールでご連絡します。</p>';
+ }catch(e){err.textContent=e.message;err.style.display='block';$('go').disabled=false;
+  if(/締め切|終了/.test(e.message))load();}
+};
+if(!id){$('loading').textContent='URLが正しくありません。';}else load();
+</script></body></html>
